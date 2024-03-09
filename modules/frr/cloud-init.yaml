@@ -1,0 +1,51 @@
+#cloud-config
+
+runcmd:
+ # add GPG key
+ - curl -s https://deb.frrouting.org/frr/keys.gpg | sudo tee /usr/share/keyrings/frrouting.gpg > /dev/null
+ # possible values for FRRVER: frr-6 frr-7 frr-8 frr-9.0 frr-9.1 frr-stable
+ # frr-stable will be the latest official stable release
+ - FRRVER="frr-stable"
+ - echo deb '[signed-by=/usr/share/keyrings/frrouting.gpg]' https://deb.frrouting.org/frr $(lsb_release -s -c) $FRRVER | sudo tee -a /etc/apt/sources.list.d/frr.list
+
+# update and install FRR 
+package_update: true
+
+packages:
+ - frr
+ - frr-pythontools
+
+write_files:
+- content: |
+    frr version 7.2.1
+    frr defaults traditional
+    hostname frr
+    log syslog informational
+    no ip forwarding
+    no ipv6 forwarding
+    service integrated-vtysh-config
+    !
+    interface lo
+    ip address ${loopback_ip}
+    !
+    router bgp ${frr_as_num}
+    neighbor ${transit_bgp_lan_ip} remote-as ${transit_as_num}
+    !
+    address-family ipv4 unicast
+      network ${loopback_cidr}
+    exit-address-family
+    !
+    line vty
+    !
+  path: /etc/frr/frr.conf
+  
+runcmd:
+ # Enable BGP Daemon
+ - sed -i 's/bgpd=no/bgpd=yes/' /etc/frr/daemons
+ # Enable Zebra
+ - sed -i 's/zebra=no/zebra=yes/' /etc/frr/daemons
+ # Enable VTYSH
+ - sed -i 's/vtysh_enable=no/vtysh_enable=yes/' /etc/frr/daemons
+ # Restart FRR service
+ - service frr restart
+ 
